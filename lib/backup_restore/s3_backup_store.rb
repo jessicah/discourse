@@ -3,7 +3,6 @@
 module BackupRestore
   class S3BackupStore < BackupStore
     UPLOAD_URL_EXPIRES_AFTER_SECONDS ||= 21_600 # 6 hours
-    MULTISITE_PREFIX = "backups"
 
     def initialize(opts = {})
       s3_options = S3Helper.s3_options(SiteSetting)
@@ -99,11 +98,7 @@ module BackupRestore
     end
 
     def s3_bucket_name_with_prefix
-      if Rails.configuration.multisite
-        File.join(SiteSetting.s3_backup_bucket, MULTISITE_PREFIX, RailsMultisite::ConnectionManagement.current_db)
-      else
-        SiteSetting.s3_backup_bucket
-      end
+      File.join(SiteSetting.s3_backup_bucket, RailsMultisite::ConnectionManagement.current_db)
     end
 
     def file_regex
