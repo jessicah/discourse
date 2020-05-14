@@ -5,9 +5,9 @@ module BackupRestore
     UPLOAD_URL_EXPIRES_AFTER_SECONDS ||= 21_600 # 6 hours
 
     def initialize(opts = {})
-      s3_options = S3Helper.s3_options(SiteSetting)
-      s3_options.merge!(opts[:s3_options]) if opts[:s3_options]
-      @s3_helper = S3Helper.new(s3_bucket_name_with_prefix, '', s3_options)
+      @s3_options = S3Helper.s3_options(SiteSetting)
+      @s3_options.merge!(opts[:s3_options]) if opts[:s3_options]
+      @s3_helper = S3Helper.new(s3_bucket_name_with_prefix, '', @s3_options)
     end
 
     def remote?
@@ -49,6 +49,19 @@ module BackupRestore
     rescue Aws::Errors::ServiceError => e
       Rails.logger.warn("Failed to generate upload URL for S3: #{e.message.presence || e.class.name}")
       raise StorageError
+    end
+
+    def vacate_legacy_prefix
+      legacy_s3_helper = S3Helper.new(s3_bucket_name_with_legacy_prefix, '', @s3_options)
+      keys = legacy_s3_helper.list.map { |o| o.key }
+      keys.each do |key|
+        @s3_helper.s3_client.copy_object({
+          bucket: s3_bucket_name_with_prefix.split('/').first,
+          copy_source: key,
+          key: File.join(s3_bucket_name_with_prefix.split('/', 2), key.split('/').last)
+        })
+        legacy_s3_helper.remove(key, false)
+      end
     end
 
     private
@@ -99,6 +112,14 @@ module BackupRestore
 
     def s3_bucket_name_with_prefix
       File.join(SiteSetting.s3_backup_bucket, RailsMultisite::ConnectionManagement.current_db)
+    end
+
+    def s3_bucket_name_with_legacy_prefix
+      if Rails.configuration.multisite
+        File.join(SiteSetting.s3_backup_bucket, MULTISITE_PREFIX, RailsMultisite::ConnectionManagement.current_db)
+      else
+        SiteSetting.s3_backup_bucket
+      end
     end
 
     def file_regex
