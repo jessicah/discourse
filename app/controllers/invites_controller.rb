@@ -100,6 +100,15 @@ class InvitesController < ApplicationController
     end
   end
 
+  def retrieve
+    params.require(:email)
+
+    invite = Invite.find_by(invited_by: current_user, email: params[:email])
+    raise Discourse::InvalidParameters.new(:email) if invite.blank?
+
+    render_serialized(invite, InviteSerializer, scope: guardian, root: nil, show_emails: params.has_key?(:email))
+  end
+
   def update
     invite = Invite.find_by(invited_by: current_user, id: params[:id])
     raise Discourse::InvalidParameters.new(:id) if invite.blank?
